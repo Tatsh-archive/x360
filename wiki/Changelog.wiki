@@ -11,6 +11,7 @@
 Known Issues:
  * Offsets are hard-coded for the 120GB hard drive (I'm about 50% done with hard drive size detection)
  * Only 32-bit filesystems are supported (16-bit will need to be supported as well once multiple partitions are supported)
+ * I accidentally took out the variable 'slash', as I thought I was no longer using it. My bad. Just add {{{static const char *slash = "/";}}} somewhere at the top. This will be fixed in r3.
 
 ===r1===
 Empty repository
