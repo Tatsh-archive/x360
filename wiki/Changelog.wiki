@@ -1,0 +1,16 @@
+#summary Features and known issues
+#labels Featured,Phase-Design,Changelog
+
+===Current revision: r2===
+Features:
+Directory Listing: 80% (multi-cluster directories are not supported)
+File Stating: 50% (name, file vs directory, and file size are supported; time is not supported)
+File Reading: 95% (full file read support; missing some error-checking so it might fail on a corrupted filesystem)
+Partitions: 3% (multiple partitions are not supported; plan for this in the future)
+
+Known Issues:
+Offsets are hard-coded for the 120GB hard drive (I'm about 50% done with hard drive size detection)
+Only 32-bit filesystems are supported (16-bit will need to be supported as well once multiple partitions are supported)
+
+===r1===
+Empty repository
