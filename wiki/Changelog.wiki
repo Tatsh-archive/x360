@@ -1,7 +1,17 @@
 #summary Features and known issues
 #labels Featured,Phase-Design,Changelog
 
-===Current revision: r2===
+===Current revision: r7===
+||Features:||Implementation:||Comments:||
+||Directory Listing:||80%||multi-cluster directories are not supported||
+||File Stating:||50%||name, file vs directory, and file size are supported; time is not supported||
+||File Reading:||95%||full file read support; missing some error-checking so it might fail on a corrupted filesystem||
+||Partitions:||5%||partition 3 support only; automatic size detection||
+
+Known Issues:
+ * Only 32-bit filesystems are supported (16-bit will need to be supported as well once multiple partitions are supported)
+
+===r2===
 ||Features:||Implementation:||Comments:||
 ||Directory Listing:||80%||multi-cluster directories are not supported||
 ||File Stating:||50%||name, file vs directory, and file size are supported; time is not supported||
@@ -11,7 +21,4 @@
 Known Issues:
  * Offsets are hard-coded for the 120GB hard drive (I'm about 50% done with hard drive size detection)
  * Only 32-bit filesystems are supported (16-bit will need to be supported as well once multiple partitions are supported)
- * I accidentally took out the variable 'slash', as I thought I was no longer using it. My bad. Just add {{{static const char *slash = "/";}}} somewhere at the top. This will be fixed in r3.
-
-===r1===
-Empty repository
+ * I accidentally took out the variable 'slash', as I thought I was no longer using it. My bad. Just add {{{static const char *slash = "/";}}} somewhere at the top. This will be fixed in r7.
