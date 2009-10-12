@@ -11,6 +11,9 @@ typedef struct {
     off_t start;
     off_t fat;
     off_t root_dir;
+    size_t size;
+    uint32_t fat_num;
+    uint32_t *fat_ptr;
 } x360_partition;
 
 typedef struct {
