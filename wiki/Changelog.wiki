@@ -1,7 +1,32 @@
 #summary Features and known issues
 #labels Featured,Phase-Design,Changelog
 
-===Current revision: r7===
+===Current revision: r10===
+||Features:||Implementation:||Comments:||
+||Directory Listing:||80%||multi-cluster directories are not supported||
+||File Stating:||60%||name, file vs directory, and file size are supported; time is weirdly supported (see known issues)||
+||File Reading:||100%||full file read support with error-checking (I think)||
+||Partitions:||5%||partition 3 support only; automatic size detection||
+||Multi-User Support:||60%||mounted files have user's uid/gid as owner uid/gid; user can set arbitrary uid/gid for owner||
+
+Options:
+||Option:||Effect:||
+||-d||Debug Mode||
+||-g||Set group GID (decimal)||
+||-h||Usage Message (also no arguements)||
+||-o||Offset-Beginning of partition (decimal)||
+||-u||Set owner UID (decimal)||
+
+Known Issues:
+ * Only 32-bit filesystems are supported (16-bit will need to be supported as well once multiple partitions are supported)
+ * '-o' only takes offsets in decimal notation.
+ * Time is theoretically supported (which means it's fully supported, but I can't figure out why the last access date is 2048 :) At least it won't all be 1970 anymore :)
+
+Comments:
+ * You are no longer forced to use debug mode (yay!) To enable debug mode, use the option '-d' on the command line.
+ * FATX images can be mounted. If you pass a normal file to be mounted, the partition offset is set to zero (so that the image can be of the partition only, instead of the entire drive)
+
+===r7===
 ||Features:||Implementation:||Comments:||
 ||Directory Listing:||80%||multi-cluster directories are not supported||
 ||File Stating:||50%||name, file vs directory, and file size are supported; time is not supported||
