@@ -30,38 +30,51 @@
 
 #include "x360.h"
 
+static const char *slash = "/";
 static uint32_t fatx_magic = 0x46415458;
 static int32_t fd;
 static x360_fat x360_table;
 static x360_partition pt = {
     0x130EB0000ll,
     0x130EB1000ll,
-    0x132973000ll,
+    0, 0, 0, NULL
 };
 static x360_boot_sector bs;
 
+
 static inline void x360_read_table() {
     lseek(fd, pt.fat, SEEK_SET);
-    read(fd, x360_table, sizeof(x360_fat));
+    read(fd, pt.fat_ptr, pt.fat_num * sizeof(uint32_t));
 }
+
+// TODO: move functions to x360_partition.c
+static inline void x360_partition_calc_size() {
+    off_t end = lseek(fd, 0, SEEK_END);
+    pt.root_dir = -(-((end - pt.start)>>12) & -0x1000ll) + pt.fat;
+    pt.size = end - pt.root_dir;
+    pt.fat_num = pt.size >> 14;
+    pt.fat_ptr = malloc(pt.fat_num * sizeof(uint32_t));
+    x360_read_table();
+}
+// end TODO
 
 static inline void x360_write_table() {
     lseek(fd, pt.fat, SEEK_SET);
-    write(fd, x360_table, sizeof(x360_fat));
+    write(fd, pt.fat_ptr, pt.fat_num * sizeof(uint32_t));
 }
 
 static inline off_t x360_cluster_off_swap(uint32_t cluster) {
-    return ((__bswap_32(cluster) - 1) * 0x4000ll) + pt.root_dir;
+    return ((off_t)(__bswap_32(cluster) - 1) << 14ll) + pt.root_dir;
 }
 
 static inline off_t x360_cluster_off(uint32_t cluster) {
-    return ((cluster - 1) * 0x4000ll) + pt.root_dir;
+    return ((off_t)(cluster - 1) << 14ll) + pt.root_dir;
 }
 
 static off_t x360_cluster(x360_file_record *fr, uint32_t cluster) {
     uint32_t i, c = __bswap_32(fr->cluster);
     for (i = 0; i < cluster; i++)
-        c = __bswap_32(x360_table[c]);
+        c = __bswap_32(pt.fat_ptr[c]);
     return c;
 }
 
@@ -97,7 +110,7 @@ static int x360_getattr(const char *path, struct stat *stbuf) {
 
     memset(stbuf, 0, sizeof (struct stat));
 
-    if (strcmp(path, "/") == 0) {
+    if (strcmp(path, slash) == 0) {
         stbuf->st_mode = S_IFDIR|0555;
         stbuf->st_nlink = 2;
         return 0;
@@ -149,7 +162,7 @@ static int x360_read(const char *path, char *buf, size_t size, off_t offset, str
     size_t total;
 
     off_t start = x360_offset(path, pt.root_dir, &fr);
-    uint32_t cl = offset / 0x4000;
+    uint32_t cl = offset >> 14;
     cl = x360_cluster(&fr, cl);
     start = x360_cluster_off(cl);
     offset %= 0x4000;
@@ -160,7 +173,7 @@ static int x360_read(const char *path, char *buf, size_t size, off_t offset, str
     total = size;
     while (offset + size > 0x4000) {
         read(fd, buf, 0x4000 - offset);
-        cl = __bswap_32(x360_table[cl]);
+        cl = __bswap_32(pt.fat_ptr[cl]);
         size -= (0x4000 - offset);
         buf += (0x4000 - offset);
         lseek(fd, x360_cluster_off(cl), SEEK_SET);
@@ -200,7 +213,7 @@ int main(int argc, char *argv[]) {
         close(fd);
         return -1;
     }
-    x360_read_table();
+    x360_partition_calc_size();
     char *fargv[4] = {argv[0], argv[2], "-d", NULL};
     int ret = fuse_main(3, fargv, &x360_oper, NULL);
     close(fd);
