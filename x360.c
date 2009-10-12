@@ -25,6 +25,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <time.h>
 #include <bits/byteswap.h>
 #include <linux/types.h>
 
@@ -32,15 +33,31 @@
 
 static const char *slash = "/";
 static uint32_t fatx_magic = 0x46415458;
+static uid_t uid;
+static gid_t gid;
 static int32_t fd;
 static x360_fat x360_table;
 static x360_partition pt = {
     0x130EB0000ll,
-    0x130EB1000ll,
-    0, 0, 0, NULL
+    0, 0, 0, 0, NULL
 };
 static x360_boot_sector bs;
 
+static inline time_t x360_fat2unix_time(uint16_t time_be, uint16_t date_be) {
+    struct tm t;
+    uint16_t time_le = __bswap_16(time_be);
+    uint16_t date_le = __bswap_16(date_be);
+
+    t.tm_year = ((date_le & 0xFE00) >> 9) + 80;
+    t.tm_mon = ((date_le & 0x1E0) >> 5) - 1;
+    t.tm_mday = (date_le & 0x1F);
+
+    t.tm_hour = ((time_le & 0xF800) >> 11);
+    t.tm_min = ((time_le & 0x7E0) >> 5);
+    t.tm_sec = ((time_le & 0x1F) << 1);
+
+    return mktime(&t);
+}
 
 static inline void x360_read_table() {
     lseek(fd, pt.fat, SEEK_SET);
@@ -49,6 +66,7 @@ static inline void x360_read_table() {
 
 // TODO: move functions to x360_partition.c
 static inline void x360_partition_calc_size() {
+    pt.fat = pt.start + 0x1000ll;
     off_t end = lseek(fd, 0, SEEK_END);
     pt.root_dir = -(-((end - pt.start)>>12) & -0x1000ll) + pt.fat;
     pt.size = end - pt.root_dir;
@@ -82,7 +100,7 @@ static off_t x360_offset_token(const char *path, off_t dir, x360_file_record *fr
     x360_dir_cluster c;
     int i;
     size_t len = strlen(path);
-    if (lseek(fd, dir, SEEK_SET) < dir) return -ENOENT;
+    if (lseek(fd, dir, SEEK_SET) != dir) return -ENOENT;
     read(fd, &c, sizeof(x360_dir_cluster));
     for (i = 0; i < X360_DIR_MAX; i++) {
         if (strncmp(c[i].filename, path, (len > c[i].fnsize ? len : c[i].fnsize)) == 0) {
@@ -122,6 +140,11 @@ static int x360_getattr(const char *path, struct stat *stbuf) {
     stbuf->st_mode = (fr.attribute & 0x10) ? (S_IFDIR|0555) : (S_IFREG|0444);
     stbuf->st_nlink = (fr.attribute & 0x10) ? 2 : 1;
     stbuf->st_size = (fr.attribute & 0x10) ? 0 : __bswap_32(fr.fsize);
+    stbuf->st_mtime = x360_fat2unix_time(fr.mtime, fr.mdate);
+    stbuf->st_ctime = x360_fat2unix_time(fr.ctime, fr.cdate);
+    stbuf->st_atime = x360_fat2unix_time(fr.atime, fr.adate);
+    stbuf->st_uid = uid;
+    stbuf->st_gid = gid;
 
     return 0;
 }
@@ -136,7 +159,7 @@ static int x360_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off
 
     off_t start = x360_offset(path, pt.root_dir, &fr);
     if (start < 0) return (int) start;
-    lseek(fd, start, SEEK_SET);
+    if (lseek(fd, start, SEEK_SET) != start) return -ENOENT;
     read(fd, &c, sizeof (x360_dir_cluster));
 
     filler(buf, ".", NULL, 0);
@@ -144,7 +167,7 @@ static int x360_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off
 
     for (i = 0; i < X360_DIR_MAX; i++) {
         if (c[i].fnsize == 0xFF) break;
-        if (c[i].fnsize != 0xE5) {
+        if (c[i].fnsize < 43) {
             memset(filename, 0, 43);
             memcpy(filename, c[i].filename, c[i].fnsize);
             filler(buf, filename, NULL, 0);
@@ -189,33 +212,68 @@ static struct fuse_operations x360_oper = {
     .read = x360_read,
 };
 
-static inline int usage() {
-    puts("Usage: x360 /dev/sdx /mount/point");
+static inline int usage(char *path) {
+    fprintf(stderr, "Usage: %s [options] /dev/sdx /mount/point\n\n", basename(path));
+    fputs("Options are:\n", stderr);
+    fputs("-d        debug mode\n", stderr);
+    fputs("-g gid    gid of mounted files\n", stderr);
+    fputs("-h        show this message\n", stderr);
+    fputs("-o offset offset to begining of FATX partition\n", stderr);
+    fputs("-u uid    uid of mounted files\n\n", stderr);
     return -1;
 }
 
 int main(int argc, char *argv[]) {
-    int32_t magic;
-    if (argc < 3) return usage();
-    fd = open(argv[1], O_RDWR);
+    int32_t magic, c, fargc = 2;
+    int32_t debug = 0;
+    int32_t override = 0;
+    struct stat st;
+    uid = getuid();
+    gid = getgid();
+    while ((c = getopt(argc, argv, "dg:ho:u:")) != -1) {
+        switch (c) {
+            case 'd':
+                debug = 1;
+                break;
+            case 'g':
+                gid = atoi(optarg);
+                break;
+            case 'h':
+                usage(argv[0]);
+                break;
+            case 'o':
+                pt.start = atoi(optarg);
+                override = 1;
+                break;
+            case 'u':
+                uid = atoi(optarg);
+                break;
+        }
+    }
+    if (argc - optind < 2) return usage(argv[0]);
+    fd = open(argv[optind], O_RDWR);
     if (fd < 1) {
-        printf("Error opening %s: %s\n", argv[1], strerror(errno));
+        printf("Error opening %s: %s\n", argv[optind], strerror(errno));
         return -1;
     }
+    fstat(fd, &st);
+    if (!override && S_ISREG(st.st_mode))
+        pt.start = 0;
     if (lseek(fd, pt.start, SEEK_SET) != pt.start) {
-        printf("Error seeking %s\n", argv[1]);
+        printf("Error seeking %s\n", argv[optind]);
         close(fd);
         return -1;
     }
     read(fd, &magic, sizeof (int32_t));
     if (magic != fatx_magic) {
-        printf("Error: %s is not a Xbox 360 hard drive\n", argv[1]);
+        printf("Error: %s is not a Xbox 360 hard drive\n", argv[optind]);
         close(fd);
         return -1;
     }
     x360_partition_calc_size();
-    char *fargv[4] = {argv[0], argv[2], "-d", NULL};
-    int ret = fuse_main(3, fargv, &x360_oper, NULL);
+    fargc += debug;
+    char *fargv[4] = {argv[0], argv[optind + 1], debug ? "-d" : NULL, NULL};
+    int ret = fuse_main(fargc, fargv, &x360_oper, NULL);
     close(fd);
     return ret;
 }
