@@ -26,6 +26,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <time.h>
+#include <libgen.h>
 #include <bits/byteswap.h>
 #include <linux/types.h>
 
@@ -42,6 +43,13 @@ static x360_partition pt = {
     0, 0, 0, 0, NULL
 };
 static x360_boot_sector bs;
+
+static inline uint32_t x360_find_free_cluster() {
+    uint32_t i;
+    for (i = 0; i < pt.fat_num; i++)
+        if ((__bswap_32(pt.fat_ptr[i]) & 0xFFFFFFF) == 0) return i;
+    return 0;
+}
 
 static inline time_t x360_fat2unix_time(uint16_t time_be, uint16_t date_be) {
     struct tm t;
@@ -123,6 +131,124 @@ static off_t x360_offset(const char *path, off_t root_dir, x360_file_record *fr)
     return ret;
 }
 
+static int fr_truncate(x360_file_record *fr, void *data) {
+    off_t *size = (off_t *)data;
+    int64_t max64 = __bswap_32(fr->fsize);
+    max64 = -(-max64 & -0x4000ll);
+    uint32_t max = max64 & 0xFFFFFFFFll;
+    if (max == 0) max = 0x4000;
+    if (*size > max) return -ENOSPC;
+    fr->fsize = __bswap_32(*size);
+    return 0;
+}
+
+static int fr_rename(x360_file_record *fr, void *data) {
+    char *new = (char *)data;
+    char *base = strdupa(new);
+    base = basename(base);
+    size_t len = strlen(base);
+    if (len > 42) return -ENAMETOOLONG;
+    fr->fnsize = len;
+    memset(fr->filename, 0xFF, 42);
+    memcpy(fr->filename, base, len);
+    return 0;
+}
+
+static int fr_unlink(x360_file_record *fr, void *data) {
+    (void) data;
+    int32_t cl, cl2;
+    fr->fnsize = 0xE5;
+    cl = __bswap_32(fr->cluster);
+    while ((cl & 0xFFFFFFF) != 0xFFFFFFF) {
+        cl2 = __bswap_32(pt.fat_ptr[cl]);
+        pt.fat_ptr[cl] = 0;
+        cl = cl2;
+    }
+    x360_write_table();
+    return 0;
+}
+
+static int x360_modify_file_record(const char *path, x360_function func, void *data) {
+    char *dpath = strdupa(path);
+    dpath = dirname(dpath);
+    char *bpath = strdupa(path);
+    bpath = basename(bpath);
+    size_t len = strlen(bpath);
+    if (len > 42) return -ENAMETOOLONG;
+
+    int i, ret;
+    x360_file_record fr;
+    x360_dir_cluster c;
+
+    off_t start = x360_offset(dpath, pt.root_dir, &fr);
+    if (start < 0) return (int) start;
+    if (lseek(fd, start, SEEK_SET) != start) return -ENOENT;
+    if (read(fd, &c, sizeof (x360_dir_cluster)) != sizeof (x360_dir_cluster))
+        return -ENOENT;
+
+    for (i = 0; i < X360_DIR_MAX; i++) {
+        if (memcmp(c[i].filename, bpath, (len > c[i].fnsize ? len : c[i].fnsize)) == 0) {
+            ret = func(c + i, data);
+            if (ret < 0) return ret;
+            if (lseek(fd, start, SEEK_SET) != start) return -ENOSPC;
+            if (write(fd, &c, sizeof (x360_dir_cluster)) != sizeof (x360_dir_cluster))
+                return -ENOSPC;
+            return ret;
+        }
+    }
+    return -ENOENT;
+}
+
+static int x360_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
+    (void) fi;
+    (void) mode;
+    char *dpath = strdupa(path);
+    dpath = dirname(dpath);
+    char *bpath = strdupa(path);
+    bpath = basename(bpath);
+    size_t len = strlen(bpath);
+    if (len > 42) return -ENAMETOOLONG;
+    int i;
+    uint32_t cl;
+    x360_file_record fr;
+    x360_dir_cluster c;
+
+    off_t start = x360_offset(dpath, pt.root_dir, &fr);
+    if (start < 0) return (int) start;
+    if (lseek(fd, start, SEEK_SET) != start) return -ENOSPC;
+    read(fd, &c, sizeof (x360_dir_cluster));
+
+    for (i = 0; i < X360_DIR_MAX; i++) {
+        if ((c[i].fnsize == 0xFF) || (c[i].fnsize == 0xE5)) {
+            memset(c + i, 0, sizeof(x360_file_record));
+            memset(c[i].filename, 0xFF, 42);
+            c[i].fnsize = len;
+            memcpy(c[i].filename, bpath, c[i].fnsize);
+            cl = x360_find_free_cluster();
+            if (cl == 0) return -ENOSPC;
+            c[i].cluster = __bswap_32(cl);
+            pt.fat_ptr[cl] = 0xFFFFFFFF;
+            x360_write_table();
+            if (lseek(fd, start, SEEK_SET) != start) return -ENOSPC;
+            write(fd, &c, sizeof (x360_dir_cluster));
+            return 0;
+        }
+    }
+    return -ENOSPC;
+}
+
+static int x360_truncate(const char *path, off_t size) {
+    return x360_modify_file_record(path, fr_truncate, &size);
+}
+
+static int x360_rename(const char *old, const char *new) {
+    return x360_modify_file_record(old, fr_rename, new);
+}
+
+static int x360_unlink(const char *path) {
+    return x360_modify_file_record(path, fr_unlink, NULL);
+}
+
 static int x360_getattr(const char *path, struct stat *stbuf) {
     x360_file_record fr;
 
@@ -137,7 +263,7 @@ static int x360_getattr(const char *path, struct stat *stbuf) {
     off_t start = x360_offset(path, pt.root_dir, &fr);
     if (start < 0) return (int) start;
 
-    stbuf->st_mode = (fr.attribute & 0x10) ? (S_IFDIR|0555) : (S_IFREG|0444);
+    stbuf->st_mode = (fr.attribute & 0x10) ? (S_IFDIR|0555) : (S_IFREG|0664);
     stbuf->st_nlink = (fr.attribute & 0x10) ? 2 : 1;
     stbuf->st_size = (fr.attribute & 0x10) ? 0 : __bswap_32(fr.fsize);
     stbuf->st_mtime = x360_fat2unix_time(fr.mtime, fr.mdate);
@@ -185,6 +311,9 @@ static int x360_read(const char *path, char *buf, size_t size, off_t offset, str
     size_t total;
 
     off_t start = x360_offset(path, pt.root_dir, &fr);
+    if (offset + size > __bswap_32(fr.fsize))
+        size = __bswap_32(fr.fsize) - offset;
+
     uint32_t cl = offset >> 14;
     cl = x360_cluster(&fr, cl);
     start = x360_cluster_off(cl);
@@ -192,7 +321,6 @@ static int x360_read(const char *path, char *buf, size_t size, off_t offset, str
     start += offset;
     lseek(fd, start, SEEK_SET);
 
-    size = (size > __bswap_32(fr.fsize)) ? __bswap_32(fr.fsize) : size;
     total = size;
     while (offset + size > 0x4000) {
         read(fd, buf, 0x4000 - offset);
@@ -206,10 +334,46 @@ static int x360_read(const char *path, char *buf, size_t size, off_t offset, str
     return total;
 }
 
+static int x360_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
+    (void) fi;
+    x360_file_record fr;
+    size_t total;
+    off_t start = x360_offset(path, pt.root_dir, &fr);
+    if (start < 0) return -ENOENT;
+    if ((offset + size) > __bswap_32(fr.fsize)) {
+        int i = x360_truncate(path, offset + size);
+        if (i < 0) return i;
+    }
+
+    uint32_t cl = offset >> 14;
+    cl = x360_cluster(&fr, cl);
+    start = x360_cluster_off(cl);
+    offset %= 0x4000;
+    start += offset;
+    lseek(fd, start, SEEK_SET);
+
+    total = size;
+    while (offset + size > 0x4000) {
+        write(fd, buf, 0x4000 - offset);
+        cl = __bswap_32(pt.fat_ptr[cl]);
+        size -= (0x4000 - offset);
+        buf += (0x4000 - offset);
+        lseek(fd, x360_cluster_off(cl), SEEK_SET);
+        offset = 0;
+    }
+    write(fd, buf, size);
+    return total;
+}
+
 static struct fuse_operations x360_oper = {
+    .create = x360_create,
+    .truncate = x360_truncate,
+    .rename = x360_rename,
+    .unlink = x360_unlink,
     .getattr = x360_getattr,
     .readdir = x360_readdir,
     .read = x360_read,
+    .write = x360_write
 };
 
 static inline int usage(char *path) {
@@ -224,9 +388,11 @@ static inline int usage(char *path) {
 }
 
 int main(int argc, char *argv[]) {
-    int32_t magic, c, fargc = 2;
-    int32_t debug = 0;
-    int32_t override = 0;
+    char *wargv = strdupa(argv[0]);
+    int32_t magic;
+    int c, fargc = 2;
+    int debug = 0;
+    int override = 0;
     struct stat st;
     uid = getuid();
     gid = getgid();
@@ -239,7 +405,7 @@ int main(int argc, char *argv[]) {
                 gid = atoi(optarg);
                 break;
             case 'h':
-                usage(argv[0]);
+                usage(wargv);
                 break;
             case 'o':
                 pt.start = atoi(optarg);
@@ -250,7 +416,7 @@ int main(int argc, char *argv[]) {
                 break;
         }
     }
-    if (argc - optind < 2) return usage(argv[0]);
+    if (argc - optind < 2) return usage(wargv);
     fd = open(argv[optind], O_RDWR);
     if (fd < 1) {
         printf("Error opening %s: %s\n", argv[optind], strerror(errno));
@@ -275,5 +441,6 @@ int main(int argc, char *argv[]) {
     char *fargv[4] = {argv[0], argv[optind + 1], debug ? "-d" : NULL, NULL};
     int ret = fuse_main(fargc, fargv, &x360_oper, NULL);
     close(fd);
+    free(pt.fat_ptr);
     return ret;
 }
