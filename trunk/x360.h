@@ -44,4 +44,6 @@ typedef struct {
 #define X360_DIR_MAX 256
 typedef x360_file_record x360_dir_cluster[X360_DIR_MAX];
 
+typedef int (*x360_function) (x360_file_record *fr, void *data);
+
 #endif
