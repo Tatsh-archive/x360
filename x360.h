@@ -1,6 +1,10 @@
 #ifndef __X360_H
 #define __X360_H
 
+#define FUSE_USE_VERSION 26
+#define _GNU_SOURCE
+
+#include <fuse.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
@@ -40,6 +44,13 @@ typedef struct {
     uint16_t atime;
     uint16_t adate;
 }__attribute__((packed)) x360_file_record;
+
+// x360_fr.c
+int x360_fr_create(x360_file_record *fr, void *data);
+int x360_fr_mkdir(x360_file_record *fr, void *data);
+int x360_fr_rename(x360_file_record *fr, void *data);
+int x360_fr_truncate(x360_file_record *fr, void *data);
+int x360_fr_unlink(x360_file_record *fr, void *data);
 
 #define X360_DIR_MAX 256
 typedef x360_file_record x360_dir_cluster[X360_DIR_MAX];

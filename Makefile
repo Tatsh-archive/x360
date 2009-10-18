@@ -4,8 +4,8 @@ LIBS += $(shell pkg-config --libs fuse)
 CC=gcc
 
 # x360 (fuse filesystem driver)
-x360: x360.c
-		$(CC) -o x360 x360.c $(CFLAGS) $(LIBS)
+x360: x360.o x360_fr.o
+		$(CC) -o x360 x360.o x360_fr.o $(LIBS)
 
 
 # build
