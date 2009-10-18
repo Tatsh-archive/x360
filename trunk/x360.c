@@ -16,43 +16,55 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#define FUSE_USE_VERSION 26
-#define _GNU_SOURCE
-
-#include <fuse.h>
+#include "x360.h"
 #include <stdio.h>
-#include <string.h>
-#include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <time.h>
 #include <libgen.h>
 #include <bits/byteswap.h>
-#include <linux/types.h>
 #include <sys/mman.h>
 
-#include "x360.h"
+#define OPTIONS \
+OPTION(uid)\
+OPTION(gid)\
+OPTION(mode)\
+OPTION(off)\
+OPTION(debug)\
+
+enum {
+    #define OPTION(x) option_##x,
+    OPTIONS
+    #undef OPTION
+};
+
+int option(char *string) {
+    #define OPTION(x) if (strcmp(string, #x) == 0) return option_##x;
+    OPTIONS
+    #undef OPTION
+}
 
 static const char *slash = "/";
+static const char *optseparators = ",=";
 static uint32_t fatx_magic = 0x46415458;
 static uid_t uid;
 static gid_t gid;
 static int32_t fd;
 static x360_fat x360_table;
-static x360_partition pt = {
+x360_partition pt = {
     0x130EB0000ll,
     0, 0, 0, 0, NULL
 };
 static x360_boot_sector bs;
 
-static inline uint32_t x360_find_free_cluster() {
+uint32_t x360_find_free_cluster() {
     uint32_t i;
     for (i = 0; i < pt.fat_num; i++)
         if ((__bswap_32(pt.fat_ptr[i]) & 0xFFFFFFF) == 0) return i;
     return 0;
 }
 
-static inline time_t x360_fat2unix_time(uint16_t time_be, uint16_t date_be) {
+time_t x360_fat2unix_time(uint16_t time_be, uint16_t date_be) {
     struct tm t;
     uint16_t time_le = __bswap_16(time_be);
     uint16_t date_le = __bswap_16(date_be);
@@ -68,7 +80,7 @@ static inline time_t x360_fat2unix_time(uint16_t time_be, uint16_t date_be) {
     return mktime(&t);
 }
 
-static inline void x360_partition_calc_size() {
+void x360_partition_calc_size() {
     pt.fat = pt.start + 0x1000ll;
     off_t end = lseek(fd, 0, SEEK_END);
     pt.root_dir = -(-((end - pt.start) >> 12) & -0x1000ll) + pt.fat;
@@ -82,29 +94,29 @@ static inline void x360_partition_calc_size() {
     }
 }
 
-static inline off_t x360_cluster_off_swap(uint32_t cluster) {
-    return ((off_t) (__bswap_32(cluster) - 1) << 14ll) +pt.root_dir;
+off_t x360_cluster_off_swap(uint32_t cluster) {
+    return ((off_t) (__bswap_32(cluster) - 1) << 14ll) + pt.root_dir;
 }
 
-static inline off_t x360_cluster_off(uint32_t cluster) {
-    return ((off_t) (cluster - 1) << 14ll) +pt.root_dir;
+off_t x360_cluster_off(uint32_t cluster) {
+    return ((off_t) (cluster - 1) << 14ll) + pt.root_dir;
 }
 
-static uint32_t x360_cluster(x360_file_record *fr, uint32_t cluster) {
+uint32_t x360_cluster(x360_file_record *fr, uint32_t cluster) {
     uint32_t i, c = __bswap_32(fr->cluster);
     for (i = 0; i < cluster; i++)
         c = __bswap_32(pt.fat_ptr[c]);
     return c;
 }
 
-static uint32_t x360_clusters(x360_file_record *fr) {
+uint32_t x360_clusters(x360_file_record *fr) {
     uint32_t i, c = __bswap_32(fr->cluster);
     for (i = 0; (c & 0xFFFFFFF) != 0xFFFFFFF; i++)
         c = __bswap_32(pt.fat_ptr[c]);
     return i;
 }
 
-static off_t x360_offset_token(const char *path, off_t dir, x360_file_record *fr) {
+off_t x360_offset_token(const char *path, off_t dir, x360_file_record *fr) {
     x360_dir_cluster c;
     int i;
     size_t len = strlen(path);
@@ -118,7 +130,7 @@ static off_t x360_offset_token(const char *path, off_t dir, x360_file_record *fr
     return -ENOENT;
 }
 
-static off_t x360_offset(const char *path, off_t root_dir, x360_file_record *fr) {
+off_t x360_offset(const char *path, off_t root_dir, x360_file_record *fr) {
     char *wpath = strdupa(path);
     off_t ret = root_dir;
     char *token = strtok(wpath, slash);
@@ -128,58 +140,6 @@ static off_t x360_offset(const char *path, off_t root_dir, x360_file_record *fr)
         token = strtok(NULL, slash);
     }
     return ret;
-}
-
-static int fr_truncate(x360_file_record *fr, void *data) {
-    off_t *size = (off_t *) data;
-    uint32_t cl, cl2;
-    uint32_t max = x360_clusters(fr) << 14;
-
-    while (*size > max) {
-        cl = x360_cluster(fr, (max >> 14) - 1);
-        cl2 = x360_find_free_cluster();
-        if (cl2 == 0) return -ENOSPC;
-        pt.fat_ptr[cl] = __bswap_32(cl2);
-        max += 0x4000;
-    }
-
-    while (*size <= (max - 0x4000)) {
-        if (*size == 0) break;
-        cl = x360_cluster(fr, (max >> 14) - 1);
-        if (cl == 0) return -EIO;
-        pt.fat_ptr[cl] = 0;
-        max -= 0x4000;
-    }
-
-    cl = x360_cluster(fr, (max >> 14) - 1);
-    pt.fat_ptr[cl] = 0xFFFFFFFF;
-    fr->fsize = __bswap_32(*size);
-    return 0;
-}
-
-static int fr_rename(x360_file_record *fr, void *data) {
-    char *new = (char *) data;
-    char *base = strdupa(new);
-    base = basename(base);
-    size_t len = strlen(base);
-    if (len > 42) return -ENAMETOOLONG;
-    fr->fnsize = len;
-    memset(fr->filename, 0xFF, 42);
-    memcpy(fr->filename, base, len);
-    return 0;
-}
-
-static int fr_unlink(x360_file_record *fr, void *data) {
-    (void) data;
-    int32_t cl, cl2;
-    fr->fnsize = 0xE5;
-    cl = __bswap_32(fr->cluster);
-    while ((cl & 0xFFFFFFF) != 0xFFFFFFF) {
-        cl2 = __bswap_32(pt.fat_ptr[cl]);
-        pt.fat_ptr[cl] = 0;
-        cl = cl2;
-    }
-    return 0;
 }
 
 static int x360_modify_file_record(const char *path, x360_function func, void *data) {
@@ -211,55 +171,61 @@ static int x360_modify_file_record(const char *path, x360_function func, void *d
     return -ENOENT;
 }
 
-static int x360_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
-    (void) fi;
-    (void) mode;
+static int x360_new_file_record(const char *path, x360_function func, void *data) {
     char *dpath = strdupa(path);
     dpath = dirname(dpath);
     char *bpath = strdupa(path);
     bpath = basename(bpath);
     size_t len = strlen(bpath);
     if (len > 42) return -ENAMETOOLONG;
-    int i;
-    uint32_t cl;
+
+    int i, ret;
     x360_file_record fr;
     x360_dir_cluster c;
 
     off_t start = x360_offset(dpath, pt.root_dir, &fr);
     if (start < 0) return (int) start;
-    pread(fd, &c, sizeof (x360_dir_cluster), start);
+    if (pread(fd, &c, sizeof(x360_dir_cluster), start) != sizeof(x360_dir_cluster))
+        return -ENOENT;
 
     for (i = 0; i < X360_DIR_MAX; i++)
         if (c[i].fnsize != 0xE5 && memcmp(c[i].filename, bpath, (len > c[i].fnsize ? len : c[i].fnsize)) == 0)
             return -EEXIST;
 
     for (i = 0; i < X360_DIR_MAX; i++) {
-        if ((c[i].fnsize == 0xFF) || (c[i].fnsize == 0xE5)) {
-            memset(c + i, 0, sizeof (x360_file_record));
-            memset(c[i].filename, 0xFF, 42);
-            c[i].fnsize = len;
-            memcpy(c[i].filename, bpath, c[i].fnsize);
-            cl = x360_find_free_cluster();
-            if (cl == 0) return -ENOSPC;
-            c[i].cluster = __bswap_32(cl);
-            pt.fat_ptr[cl] = 0xFFFFFFFF;
-            pwrite(fd, &c, sizeof(x360_dir_cluster), start);
-            return 0;
+        if ((c[i].fnsize == 0xFF) || c[i].fnsize == 0xE5) {
+            ret = func(c + i, data);
+            if (ret < 0) return ret;
+            if (pwrite(fd, &c, sizeof(x360_dir_cluster), start) != sizeof(x360_dir_cluster))
+                return -ENOSPC;
+            return ret;
         }
     }
-    return -ENOSPC;
+    return ENOSPC;
 }
 
-static int x360_truncate(const char *path, off_t size) {
-    return x360_modify_file_record(path, fr_truncate, &size);
+static int x360_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
+    return x360_new_file_record(path, x360_fr_create, path);
+}
+
+static int x360_mkdir(const char *path, mode_t mode) {
+    return x360_new_file_record(path, x360_fr_mkdir, path);
 }
 
 static int x360_rename(const char *old, const char *new) {
-    return x360_modify_file_record(old, fr_rename, new);
+    return x360_modify_file_record(old, x360_fr_rename, new);
+}
+
+static int x360_rmdir(const char *path) {
+    return x360_modify_file_record(path, x360_fr_unlink, NULL);
+}
+
+static int x360_truncate(const char *path, off_t size) {
+    return x360_modify_file_record(path, x360_fr_truncate, &size);
 }
 
 static int x360_unlink(const char *path) {
-    return x360_modify_file_record(path, fr_unlink, NULL);
+    return x360_modify_file_record(path, x360_fr_unlink, NULL);
 }
 
 static int x360_getattr(const char *path, struct stat *stbuf) {
@@ -293,6 +259,7 @@ static int x360_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off
     (void) fi;
     char filename[43];
     int i;
+    uint32_t cl;
     x360_file_record fr;
     x360_dir_cluster c;
 
@@ -312,7 +279,21 @@ static int x360_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off
         }
     }
 
-    //TODO: add support for multi-cluster directories. You're gonna need it.
+    if (strcmp(path, slash) == 0) return 0;
+
+    cl = __bswap_32(pt.fat_ptr[__bswap_32(fr.cluster)]);
+    while ((cl & 0xFFFFFFF) != 0xFFFFFFF) {
+        off_t start = x360_cluster_off(cl);
+        pread(fd, &c, sizeof(x360_dir_cluster), start);
+        for (i = 0; i < X360_DIR_MAX; i++) {
+            if (c[i].fnsize == 0xFF) break;
+            if (c[i].fnsize < 43) {
+                memset(filename, 0, 43);
+                memcpy(filename, c[i].filename, c[i].fnsize);
+                filler(buf, filename, NULL, 0);
+            }
+        }
+    }
 
     return 0;
 }
@@ -377,9 +358,11 @@ static int x360_write(const char *path, const char *buf, size_t size, off_t offs
 
 static struct fuse_operations x360_oper = {
     .create = x360_create,
+    .mkdir = x360_mkdir,
     .truncate = x360_truncate,
     .rename = x360_rename,
     .unlink = x360_unlink,
+    .rmdir = x360_rmdir,
     .getattr = x360_getattr,
     .readdir = x360_readdir,
     .read = x360_read,
@@ -389,16 +372,19 @@ static struct fuse_operations x360_oper = {
 static inline int usage(char *path) {
     fprintf(stderr, "Usage: %s [options] /dev/sdx /mount/point\n\n", basename(path));
     fputs("Options are:\n", stderr);
-    fputs("-d        debug mode\n", stderr);
-    fputs("-g gid    gid of mounted files\n", stderr);
-    fputs("-h        show this message\n", stderr);
-    fputs("-o offset offset to begining of FATX partition\n", stderr);
-    fputs("-u uid    uid of mounted files\n\n", stderr);
+    fputs("-h         show this message\n", stderr);
+    fputs("-o options comma-separated list of options\n", stderr);
+    fputs("\tdebug debug mode\n", stderr);
+    fputs("\tgid=  set owner gid\n", stderr);
+    fputs("\toff=  set file offset\n", stderr);
+    fputs("\tuid=  set owner uid\n\n", stderr);
+    fprintf(stderr, "Example: %s -o debug,uid=1000 /dev/sdb ~/x360\n", basename(path));
     return -1;
 }
 
 int main(int argc, char *argv[]) {
     char *wargv = strdupa(argv[0]);
+    char *opt;
     int32_t magic;
     int c, fargc = 2;
     int debug = 0;
@@ -406,23 +392,35 @@ int main(int argc, char *argv[]) {
     struct stat st;
     uid = getuid();
     gid = getgid();
-    while ((c = getopt(argc, argv, "dg:ho:u:")) != -1) {
+    while ((c = getopt(argc, argv, "ho:")) != -1) {
         switch (c) {
-            case 'd':
-                debug = 1;
-                break;
-            case 'g':
-                gid = atoi(optarg);
-                break;
             case 'h':
                 usage(wargv);
                 break;
             case 'o':
-                pt.start = atoi(optarg);
+                opt = strtok(optarg, optseparators);
+                while (opt != NULL) {
+                    switch (option(opt)) {
+                        case option_debug:
+                            debug = 1;
+                            break;
+                        case option_gid:
+                            opt = strtok(NULL, optseparators);
+                            gid = (int) strtoul(opt, NULL, 0);
+                            break;
+                        case option_off:
+                            opt = strtok(NULL, optseparators);
+                            pt.start = strtoull(opt, NULL, 0);
+                            break;
+                        case option_uid:
+                            opt = strtok(NULL, optseparators);
+                            uid = (int) strtoul(opt, NULL, 0);
+                            break;
+                    }
+                    opt = strtok(NULL, optseparators);
+                }
+                pt.start = strtoull(optarg, NULL, 0);
                 override = 1;
-                break;
-            case 'u':
-                uid = atoi(optarg);
                 break;
         }
     }
@@ -437,7 +435,7 @@ int main(int argc, char *argv[]) {
         pt.start = 0;
     pread(fd, &magic, sizeof (int32_t), pt.start);
     if (magic != fatx_magic) {
-        printf("Error: %s is not a Xbox 360 hard drive\n", argv[optind]);
+        printf("Error: %s is not a Xbox 360 hard drive or image\n", argv[optind]);
         close(fd);
         return -1;
     }
