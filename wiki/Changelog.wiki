@@ -1,7 +1,9 @@
 #summary Features and known issues
 #labels Featured,Phase-Design,Changelog
 
-===Current revision: r15===
+Revisions newer than r15 have README files with this information.
+
+===r15===
 ||Features:||Implementation:||Comments:||
 ||Directory Listing:||80%||multi-cluster directories are not supported||
 ||File Stating:||60%||name, file vs directory, and file size are supported; time is weirdly supported (see known issues)||
