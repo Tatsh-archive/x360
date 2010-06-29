@@ -419,8 +419,6 @@ int main(int argc, char *argv[]) {
                     }
                     opt = strtok(NULL, optseparators);
                 }
-                pt.start = strtoull(optarg, NULL, 0);
-                override = 1;
                 break;
         }
     }
