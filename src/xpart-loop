@@ -1,0 +1,126 @@
+#!/bin/sh
+# Xbox 360 Partition Helper
+# fakes some sda1, sda2... style partitions for your disk using losetup
+
+usage()
+{
+cat << EOF
+xpart: Xbox 360 Partition Helper
+Usage: xpart /dev/sdx
+EOF
+exit 2
+}
+
+[ $# -eq 1 ] || usage
+
+file=$1
+while [ -L $file ]
+do
+	file=`readlink $file`
+done
+
+echo "xpart: Xbox 360 Partition Helper"
+echo "Using hardcoded values"
+
+mknod "${1}1" b 9 8
+ret=$?
+if [ $ret -ne 0 ]
+then
+	echo "Failed splitting first partition. (mknod exit code: $ret)"
+	exit 1
+fi
+
+chown root:disk "${1}1"
+ret=$?
+if [ $ret -ne 0 ]
+then
+	echo "Failed splitting first partition. (chown exit code: $ret)"
+	exit 1
+fi
+
+chmod 660 "${1}1"
+ret=$?
+if [ $ret -ne 0 ]
+then
+	echo "Failed splitting first partition. (chmod exit code: $ret)"
+	exit 1
+fi
+
+losetup -o $((0x80000)) --sizelimit $((0x80080000 - 0x80000)) "${1}1" "$file"
+ret=$?
+if [ $ret -ne 0 ]
+then
+	echo "Failed splitting first partition. (losetup exit code: $ret)"
+	exit 1
+fi
+
+echo "Partition one is accessible at ${1}1."
+
+mknod "${1}2" b 9 9
+ret=$?
+if [ $ret -ne 0 ]
+then
+	echo "Failed splitting second partition. (mknod exit code: $ret)"
+	exit 1
+fi
+
+chown root:disk "${1}2"
+ret=$?
+if [ $ret -ne 0 ]
+then
+	echo "Failed splitting second partition. (chown exit code: $ret)"
+	exit 1
+fi
+
+chmod 660 "${1}2"
+ret=$?
+if [ $ret -ne 0 ]
+then
+	echo "Failed splitting second partition. (chmod exit code: $ret)"
+	exit 1
+fi
+
+losetup -o $((0x120EB0000)) --sizelimit $((0x130EB0000 - 0x120EB0000)) "${1}2" "$file"
+ret=$?
+if [ $ret -ne 0 ]
+then
+	echo "Failed splitting second partition. (losetup exit code: $ret)"
+	exit 1
+fi
+
+echo "Partition one is accessible at ${1}2."
+
+mknod "${1}3" b 9 10
+ret=$?
+if [ $ret -ne 0 ]
+then
+	echo "Failed splitting third partition. (mknod exit code: $ret)"
+	exit 1
+fi
+
+chown root:disk "${1}3"
+ret=$?
+if [ $ret -ne 0 ]
+then
+	echo "Failed splitting third partition. (chown exit code: $ret)"
+	exit 1
+fi
+
+chmod 660 "${1}3"
+ret=$?
+if [ $ret -ne 0 ]
+then
+	echo "Failed splitting third partition. (chmod exit code: $ret)"
+	exit 1
+fi
+
+losetup -o 5115674624 "${1}3" "$file"
+ret=$?
+if [ $ret -ne 0 ]
+then
+	echo "Failed splitting third partition. (losetup exit code: $ret)"
+	exit 1
+fi
+
+echo "Partition three is accessible at ${1}3."
+exit 0
