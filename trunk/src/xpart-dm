@@ -1,0 +1,40 @@
+#!/bin/sh
+# Xbox 360 Partition Helper
+# fakes some sda1, sda2... style partitions for your disk using dmsetup
+# unlike the losetup version, the input file MUST BE a block device
+# use losetup to create one if you are using an image file
+
+usage()
+{
+cat << EOF
+xpart: Xbox 360 Partition Helper
+Usage: xpart /dev/sdx
+EOF
+exit 2
+}
+
+[ $# -eq 1 ] || usage
+
+file=$1
+bname=`basename $file`
+
+realfile=$file
+while [ -L $realfile ]
+do
+	realfile=`readlink $realfile`
+done
+
+sz=`blockdev --getsz $realfile`
+
+echo "xpart: Xbox 360 Partition Helper"
+echo "Using hardcoded values"
+
+dmsetup create ${bname}1 --table "0 4194304 linear $realfile 1024"
+dmsetup create ${bname}2 --table "0 524288 linear $realfile 9467264"
+dmsetup create ${bname}3 --table "0 $((sz - 9991552)) linear $realfile 9991552"
+
+ln -s /dev/mapper/${bname}1 /dev/${bname}1
+ln -s /dev/mapper/${bname}2 /dev/${bname}2
+ln -s /dev/mapper/${bname}3 /dev/${bname}3
+
+echo "Created files /dev/${bname}1, /dev/${bname}2, & /dev/${bname}3 based on file $file"
