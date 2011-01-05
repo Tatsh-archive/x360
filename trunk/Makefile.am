@@ -1,1 +1,1 @@
-SUBDIRS=src/libfatx src/xfd
+SUBDIRS=src src/libfatx src/xfd

@@ -1,12 +1,12 @@
-bin_PROGRAMS=xfd
-xfd_SOURCES=xfd.c
-xfd_LDADD=../libfatx/libfatx.la
-xfd_CFLAGS=$(AM_CFLAGS) -D_FILE_OFFSET_BITS=64 -I../include
-xfd_LDFLAGS=$(AM_LDFLAGS) -static
+bin_PROGRAMS=xfd-mount
+xfd_mount_SOURCES=xfd.c
+xfd_mount_LDADD=../libfatx/libfatx.la
+xfd_mount_CFLAGS=$(AM_CFLAGS) -D_FILE_OFFSET_BITS=64 -I../include
+xfd_mount_LDFLAGS=$(AM_LDFLAGS) -static
 
 install-exec-hook:
-	[ -d $(sbindir) ] || mkdir -p $(sbindir)
-	[ -L $(sbindir)/mount.fatx ] || ln -s $(bindir)/xfd $(sbindir)/mount.fatx
+	[ -z "$(sbindir)" ] || $(MKDIR_P) "$(DESTDIR)$(sbindir)"
+	[ -L $(DESTDIR)$(sbindir)/mount.fatx ] || ln -s $(bindir)/xfd-mount $(sbindir)/mount.fatx
 
 uninstall-hook:
-	[ -L $(sbindir)/mount.fatx ] && rm $(sbindir)/mount.fatx
+	[ -L $(DESTDIR)$(sbindir)/mount.fatx ] && rm -f $(DESTDIR)$(sbindir)/mount.fatx

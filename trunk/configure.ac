@@ -16,6 +16,6 @@ AC_CONFIG_MACRO_DIR([m4])
 AC_PROG_CC
 AC_PROG_CC_C_O
 
-AC_CONFIG_FILES(Makefile src/libfatx/Makefile src/xfd/Makefile)
+AC_CONFIG_FILES(Makefile src/Makefile src/libfatx/Makefile src/xfd/Makefile)
 AC_OUTPUT
 
