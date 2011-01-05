@@ -35,7 +35,7 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 target_triplet = @target@
-bin_PROGRAMS = xfd$(EXEEXT)
+bin_PROGRAMS = xfd-mount$(EXEEXT)
 subdir = src/xfd
 DIST_COMMON = $(srcdir)/Makefile.am $(srcdir)/Makefile.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
@@ -47,12 +47,12 @@ CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(bindir)"
 PROGRAMS = $(bin_PROGRAMS)
-am_xfd_OBJECTS = xfd-xfd.$(OBJEXT)
-xfd_OBJECTS = $(am_xfd_OBJECTS)
-xfd_DEPENDENCIES = ../libfatx/libfatx.la
-xfd_LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
-	--mode=link $(CCLD) $(xfd_CFLAGS) $(CFLAGS) $(xfd_LDFLAGS) \
-	$(LDFLAGS) -o $@
+am_xfd_mount_OBJECTS = xfd_mount-xfd.$(OBJEXT)
+xfd_mount_OBJECTS = $(am_xfd_mount_OBJECTS)
+xfd_mount_DEPENDENCIES = ../libfatx/libfatx.la
+xfd_mount_LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) \
+	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(xfd_mount_CFLAGS) \
+	$(CFLAGS) $(xfd_mount_LDFLAGS) $(LDFLAGS) -o $@
 DEFAULT_INCLUDES = -I.@am__isrc@
 depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__depfiles_maybe = depfiles
@@ -66,8 +66,8 @@ CCLD = $(CC)
 LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
 	--mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) \
 	$(LDFLAGS) -o $@
-SOURCES = $(xfd_SOURCES)
-DIST_SOURCES = $(xfd_SOURCES)
+SOURCES = $(xfd_mount_SOURCES)
+DIST_SOURCES = $(xfd_mount_SOURCES)
 ETAGS = etags
 CTAGS = ctags
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
@@ -186,10 +186,10 @@ target_vendor = @target_vendor@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
-xfd_SOURCES = xfd.c
-xfd_LDADD = ../libfatx/libfatx.la
-xfd_CFLAGS = $(AM_CFLAGS) -D_FILE_OFFSET_BITS=64 -I../include
-xfd_LDFLAGS = $(AM_LDFLAGS) -static
+xfd_mount_SOURCES = xfd.c
+xfd_mount_LDADD = ../libfatx/libfatx.la
+xfd_mount_CFLAGS = $(AM_CFLAGS) -D_FILE_OFFSET_BITS=64 -I../include
+xfd_mount_LDFLAGS = $(AM_LDFLAGS) -static
 all: all-am
 
 .SUFFIXES:
@@ -267,9 +267,9 @@ clean-binPROGRAMS:
 	list=`for p in $$list; do echo "$$p"; done | sed 's/$(EXEEXT)$$//'`; \
 	echo " rm -f" $$list; \
 	rm -f $$list
-xfd$(EXEEXT): $(xfd_OBJECTS) $(xfd_DEPENDENCIES) 
-	@rm -f xfd$(EXEEXT)
-	$(xfd_LINK) $(xfd_OBJECTS) $(xfd_LDADD) $(LIBS)
+xfd-mount$(EXEEXT): $(xfd_mount_OBJECTS) $(xfd_mount_DEPENDENCIES) 
+	@rm -f xfd-mount$(EXEEXT)
+	$(xfd_mount_LINK) $(xfd_mount_OBJECTS) $(xfd_mount_LDADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
@@ -277,7 +277,7 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xfd-xfd.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xfd_mount-xfd.Po@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
@@ -300,19 +300,19 @@ distclean-compile:
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(LTCOMPILE) -c -o $@ $<
 
-xfd-xfd.o: xfd.c
-@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(xfd_CFLAGS) $(CFLAGS) -MT xfd-xfd.o -MD -MP -MF $(DEPDIR)/xfd-xfd.Tpo -c -o xfd-xfd.o `test -f 'xfd.c' || echo '$(srcdir)/'`xfd.c
-@am__fastdepCC_TRUE@	$(am__mv) $(DEPDIR)/xfd-xfd.Tpo $(DEPDIR)/xfd-xfd.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='xfd.c' object='xfd-xfd.o' libtool=no @AMDEPBACKSLASH@
+xfd_mount-xfd.o: xfd.c
+@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(xfd_mount_CFLAGS) $(CFLAGS) -MT xfd_mount-xfd.o -MD -MP -MF $(DEPDIR)/xfd_mount-xfd.Tpo -c -o xfd_mount-xfd.o `test -f 'xfd.c' || echo '$(srcdir)/'`xfd.c
+@am__fastdepCC_TRUE@	$(am__mv) $(DEPDIR)/xfd_mount-xfd.Tpo $(DEPDIR)/xfd_mount-xfd.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='xfd.c' object='xfd_mount-xfd.o' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(xfd_CFLAGS) $(CFLAGS) -c -o xfd-xfd.o `test -f 'xfd.c' || echo '$(srcdir)/'`xfd.c
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(xfd_mount_CFLAGS) $(CFLAGS) -c -o xfd_mount-xfd.o `test -f 'xfd.c' || echo '$(srcdir)/'`xfd.c
 
-xfd-xfd.obj: xfd.c
-@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(xfd_CFLAGS) $(CFLAGS) -MT xfd-xfd.obj -MD -MP -MF $(DEPDIR)/xfd-xfd.Tpo -c -o xfd-xfd.obj `if test -f 'xfd.c'; then $(CYGPATH_W) 'xfd.c'; else $(CYGPATH_W) '$(srcdir)/xfd.c'; fi`
-@am__fastdepCC_TRUE@	$(am__mv) $(DEPDIR)/xfd-xfd.Tpo $(DEPDIR)/xfd-xfd.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='xfd.c' object='xfd-xfd.obj' libtool=no @AMDEPBACKSLASH@
+xfd_mount-xfd.obj: xfd.c
+@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(xfd_mount_CFLAGS) $(CFLAGS) -MT xfd_mount-xfd.obj -MD -MP -MF $(DEPDIR)/xfd_mount-xfd.Tpo -c -o xfd_mount-xfd.obj `if test -f 'xfd.c'; then $(CYGPATH_W) 'xfd.c'; else $(CYGPATH_W) '$(srcdir)/xfd.c'; fi`
+@am__fastdepCC_TRUE@	$(am__mv) $(DEPDIR)/xfd_mount-xfd.Tpo $(DEPDIR)/xfd_mount-xfd.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='xfd.c' object='xfd_mount-xfd.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(xfd_CFLAGS) $(CFLAGS) -c -o xfd-xfd.obj `if test -f 'xfd.c'; then $(CYGPATH_W) 'xfd.c'; else $(CYGPATH_W) '$(srcdir)/xfd.c'; fi`
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(xfd_mount_CFLAGS) $(CFLAGS) -c -o xfd_mount-xfd.obj `if test -f 'xfd.c'; then $(CYGPATH_W) 'xfd.c'; else $(CYGPATH_W) '$(srcdir)/xfd.c'; fi`
 
 mostlyclean-libtool:
 	-rm -f *.lo
@@ -524,11 +524,11 @@ uninstall-am: uninstall-binPROGRAMS
 
 
 install-exec-hook:
-	[ -d $(sbindir) ] || mkdir -p $(sbindir)
-	[ -L $(sbindir)/mount.fatx ] || ln -s $(bindir)/xfd $(sbindir)/mount.fatx
+	[ -z "$(sbindir)" ] || $(MKDIR_P) "$(DESTDIR)$(sbindir)"
+	[ -L $(DESTDIR)$(sbindir)/mount.fatx ] || ln -s $(bindir)/xfd-mount $(sbindir)/mount.fatx
 
 uninstall-hook:
-	[ -L $(sbindir)/mount.fatx ] && rm $(sbindir)/mount.fatx
+	[ -L $(DESTDIR)$(sbindir)/mount.fatx ] && rm -f $(DESTDIR)$(sbindir)/mount.fatx
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

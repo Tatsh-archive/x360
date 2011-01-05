@@ -11342,7 +11342,7 @@ $as_echo "@%:@define NO_MINUS_C_MINUS_O 1" >>confdefs.h
 fi
 
 
-ac_config_files="$ac_config_files Makefile src/libfatx/Makefile src/xfd/Makefile"
+ac_config_files="$ac_config_files Makefile src/Makefile src/libfatx/Makefile src/xfd/Makefile"
 
 cat >confcache <<\_ACEOF
 # This file is a shell script that caches the results of configure
@@ -12339,6 +12339,7 @@ do
     "depfiles") CONFIG_COMMANDS="$CONFIG_COMMANDS depfiles" ;;
     "libtool") CONFIG_COMMANDS="$CONFIG_COMMANDS libtool" ;;
     "Makefile") CONFIG_FILES="$CONFIG_FILES Makefile" ;;
+    "src/Makefile") CONFIG_FILES="$CONFIG_FILES src/Makefile" ;;
     "src/libfatx/Makefile") CONFIG_FILES="$CONFIG_FILES src/libfatx/Makefile" ;;
     "src/xfd/Makefile") CONFIG_FILES="$CONFIG_FILES src/xfd/Makefile" ;;
 

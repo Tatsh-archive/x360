@@ -64,7 +64,7 @@ symlink to xpart-dm.
 
 xfd (Xbox Filesystem Driver)
 
-Usage: xfd [options] /dev/sdcX /mnt
+Usage: xfd-mount [options] /dev/sdcX /mnt
        mount -t fatx [options] /dev/sdcX /mnt
 
 Options are: -d: debug mode, fuse does not daemonize and prints
@@ -77,8 +77,8 @@ specifically, libfatx) has support for filesystems of any size, big or
 little endian, with 16 bit FAT or 32 bit FAT.
 
 Note: You can invoke this through "mount -t fatx", but that method
-requires you to be root, whereas simply using xfd does not require you
-to be root. Not being root is always better :)
+requires you to be root, whereas simply using xfd-mount does not
+require you to be root. Not being root is always better :)
 
 
 
