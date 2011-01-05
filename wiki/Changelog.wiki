@@ -1,6 +1,43 @@
 #summary Features and known issues
 #labels Featured,Phase-Design,Changelog
 
+MASSIVE UPDATE! WELCOME TO 2011!
+
+Well, I started around December 15th, and my goal was to have a brand new FATX library (libfatx) finished by the new year. I came pretty close, but I didn't quite get to write support and file creation/truncation/deletion.
+
+Anyways, here's the shape of things to come: x360 is no longer a FUSE filesystem driver for the Xbox 360 hard drive, but is now a collection of tools (one of which is the filesystem driver) pertaining to all things Xbox. It's the only tool at this time, but I really want to add more things (a command-line gamesave resigner, or similar).
+
+I've been away from this project for too long, so my resolution is to spend more time on it :)
+
+But enough of this nonsensical rambling! Here are the new features:
+
+* Support for little-endian filesystems as well as big-endian ones. Also, I'm using macros such as be32toh, so if there's anyone out there who wants to try this on an Xbox 360 running linux (I know there was a comment of the likes before), now would be a great time! (But, I give no guarantees.)
+
+* Support for filesystems with 16-bit FATs, as well as 32-bit FATs. Speaking of which...
+
+* Support for partitions 0, 2, and 3 (by their Xplorer360 given names). Although, I gotta warn you, I couldn't read my partition 0 with this or in Xplorer360. I think MS started encrypting it.
+
+* Support for timestamps! FATX to unix and vice versa. I know it's a moot point (who cares about timestamps), but I personally was so excited once I discovered the trick. That time issue was bothering me on such a big level.
+
+* Multi-cluster directories are now supported.
+
+* Loads more error checking.
+
+This new driver is a complete rewrite, however, and there are some things I just haven't gotten around to yet:
+
+* Writing is not supported
+* Creating files is not supported
+* Renaming is not supported
+* Resizing (truncating) is not supported
+* Deleting is not supported
+* Arbitrary uid/gid is not supported (who cares)
+
+Although it looks like we've lost a lot of features, I'm confident that this new version is a step forward (especially with its level of error checking). Plus, if your disk is /dev/sdb, or example, the partitions show up as /dev/sdb1, /dev/sdb2, and /dev/sdb3. How can you beat that? (See the readme for more information on the partition helper).
+
+Well, I could go on forever, but I won't. If there's anything that isn't covered here or in the readme, drop a comment. Oh, and if you want the old version, look in branches/retro.
+
+==Old Revisions (now in branches/retro)==
+
 Revisions newer than r15 have README files with this information.
 
 ===r15===
