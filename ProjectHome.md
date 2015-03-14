@@ -1,0 +1,3 @@
+x360 is a set of tools that allow linux users to interface with their Xbox 360. Currently, it is comprised of a filesystem driver and a matching library (and a partition helper), but it will soon have some other tools, such as a gamesave resigner and (possibly - no guarantees) a media manager.
+
+(The name "x360" used to refer directly to the filesystem driver, but now it refers to the collection of tools in general.)
